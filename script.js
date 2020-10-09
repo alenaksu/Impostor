@@ -1,115 +1,109 @@
-var REGION_NAME = "Impostor"
+var REGION_NAME = 'Impostor';
 var SERVER_PORT = 22023;
 
-$(document).ready(function(){
-    fillIPAdressUsingLocationHash();
-    
-    showPlatformText();
-    
-    $("#serverFileForm").submit(function(e){
-        e.preventDefault();
-        let serverIp = $("#ip").val();
-        let serverPort = $("#port").val();
-        let serverFileBytes = generateServerFile(REGION_NAME, serverIp, serverPort);
-        let blob = new Blob([serverFileBytes.buffer]);
-        saveFile(blob, "regionInfo.dat");
-    });
+const ip = document.querySelector('#ip');
+const port = document.querySelector('#port');
+const form = document.querySelector('#serverFileForm');
 
-});
+/**
+ * Convert integer number to little-endian 16-bits int representation
+ * @param {number} int
+ */
+const int16 = (int) => [int & 0xff, (int & 0xff00) >> 8];
 
-function fillIPAdressUsingLocationHash() {
-    let urlServerAddress = document.location.hash.substr(1).split(":");
-    let serverIp = urlServerAddress[0];
-    let serverPort = urlServerAddress.length > 1 ? urlServerAddress[1] : SERVER_PORT.toString();
-    const ipPattern = $("#ip").attr("pattern");
-    
-    if (new RegExp(ipPattern).test(serverIp)) {
-        $("#ip").val(serverIp);
-    }
-    if (new RegExp("^[0-9]+$", "g").test(serverPort)) {
-        $("#port").val(serverPort);
-    }
-}
+/**
+ * Convert integer number to little-endian 32-bits int representation
+ * @param {number} int
+ */
+const int32 = (int) => [
+    int & 0xff,
+    (int & 0xff00) >> 8,
+    (int & 0xff0000) >> 16,
+    (int & 0xff000000) >> 24,
+];
 
-function showPlatformText() {
-    if (navigator.userAgent.match(/iPhone/i) || navigator.userAgent.match(/iPod/i)) {
-        $('.ios-support').show();
-    } else if (navigator.userAgent.match(/android/i)) {
-        $('.android-support').show();
-    } else {
-        $('.desktop-support').show();
-    }
-}
+const ipAddressToBytes = (ipAddress) => ipAddress.split('.').map(parseInt);
 
-function generateServerFile(regionName, ip, port) {
-    let bytesArray = int32(0);
-    bytesArray.push(regionName.length);
-    bytesArray = concatArrays(bytesArray, stringToBytes(regionName));
-    bytesArray.push(ip.length);
-    bytesArray = concatArrays(bytesArray, stringToBytes(ip));
-    bytesArray = concatArrays(bytesArray, int32(1));
-    
-    let serverName = regionName + "-Master-1";
-
-    bytesArray.push(serverName.length);
-    bytesArray = concatArrays(bytesArray, stringToBytes(serverName));
-    bytesArray = concatArrays(bytesArray, ipAddressToBytes(ip));
-    bytesArray = concatArrays(bytesArray, int16(port));
-    bytesArray = concatArrays(bytesArray, int32(0));
-    return Uint8Array.from(bytesArray);
-}
-
-function saveFile(blob, fileName) {
-    let url = URL.createObjectURL(blob);
-    
-    let a = document.createElement("a");
-    document.body.appendChild(a);
-    a.style = "display: none";
-    a.href = url;
-    a.download = fileName;
-    a.click();
-    
-    URL.revokeObjectURL(url);
-}
-
-function stringToBytes(str) {
+const stringToBytes = (str) => {
     let bytes = [];
     for (let i = 0; i < str.length; i++) {
         bytes.push(str.charCodeAt(i));
     }
     return bytes;
-}
+};
 
-function int16(int) {
-    //Convert integer number to little-endian 16-bits int representation
-    return [(int & 0xFF), 
-            (int & 0xFF00) >> 8];
-}
+const showPlatformText = () => {
+    const device =
+        navigator.userAgent.match(/iPhone/i) ||
+        navigator.userAgent.match(/iPod/i)
+            ? 'ios'
+            : navigator.userAgent.match(/android/i)
+            ? 'android'
+            : 'desktop';
 
-function int32(int) {
-    //Convert integer number to little-endian 32-bits int representation
-    return [(int & 0xFF), 
-            (int & 0xFF00) >> 8, 
-            (int & 0xFF0000) >> 16, 
-            (int & 0xFF000000) >> 24];
-}
+    document.querySelector(`.${device}-support`).style.display = 'block';
+};
 
-function ipAddressToBytes(ipAddress) {
-    let octets = ipAddress.split(".");
-    let bytes = [];
-    for(let i = 0; i < octets.length; i++) {
-        bytes.push(parseInt(octets[i]));
-    }
-    return bytes;
-}
+const saveFile = (blob, fileName) => {
+    const a = document.createElement('a');
+    a.style.display = 'none';
 
-function concatArrays(array1, array2) {
-    let newArray = [];
-    for (let i = 0; i < array1.length; i++) {
-        newArray.push(array1[i]);
-    }
-    for (let i = 0; i < array2.length; i++) {
-        newArray.push(array2[i]);
-    }
-    return newArray;
-}
+    a.href = URL.createObjectURL(blob);
+    a.download = fileName;
+
+    document.body.appendChild(a);
+    a.click();
+
+    setTimeout(() => URL.revokeObjectURL(a.href), 100);
+};
+
+const fillIPAdressUsingLocationHash = () => {
+    const urlServerAddress = document.location.hash.substr(1).split(':');
+    const serverIp = urlServerAddress[0];
+    const serverPort =
+        urlServerAddress.length > 1
+            ? urlServerAddress[1]
+            : SERVER_PORT.toString();
+
+    ip.value = serverIp;
+    port.value = serverPort;
+};
+
+const generateServerFile = (regionName, ip, port) => {
+    const bytesArray = int32(0);
+    bytesArray.push(regionName.length);
+    bytesArray.push(...stringToBytes(regionName));
+    bytesArray.push(ip.length);
+    bytesArray.push(...stringToBytes(ip));
+    bytesArray.push(...int32(1));
+
+    const serverName = `${regionName}-Master-1`;
+
+    bytesArray.push(serverName.length);
+    bytesArray.push(...stringToBytes(serverName));
+    bytesArray.push(...ipAddressToBytes(ip));
+    bytesArray.push(...int16(port));
+    bytesArray.push(...int32(0));
+
+    return Uint8Array.from(bytesArray);
+};
+
+const setValidated = () => form.classList.add('was-validated');
+
+fillIPAdressUsingLocationHash();
+showPlatformText();
+
+form.addEventListener('submit', (e) => {
+    e.preventDefault();
+
+    const serverFileBytes = generateServerFile(
+        REGION_NAME,
+        ip.value,
+        port.value
+    );
+    const blob = new Blob([serverFileBytes.buffer]);
+    saveFile(blob, 'regionInfo.dat');
+});
+
+form.addEventListener('invalid', setValidated, true);
+form.addEventListener('submit', setValidated);
